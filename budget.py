@@ -1,82 +1,89 @@
 class Category:
-    def __init__(self, description):
-        self.description = description
+    def __init__(self, category_name):
+        self.category_name = category_name
         self.ledger = []
-        self.__balance = 0.0
+        self.balance = 0
+        self.total_withdrawn = 0
 
-    def __repr__(self):
-        header = self.description.center(30, "*") + "\n"
-        ledger = ""
+    def __str__(self):
+
+        # adds title line to output string
+        self.output = f'{self.category_name:*^30}\n'
+
+        # adds each description and amount to output string
         for item in self.ledger:
-            # format description and amount
-            line_description = "{:<23}".format(item["description"])
-            line_amount = "{:>7.2f}".format(item["amount"])
-            # Truncate ledger description and amount to 23 and 7 characters respectively
-            ledger += "{}{}\n".format(line_description[:23], line_amount[:7])
-        total = "Total: {:.2f}".format(self.__balance)
-        return header + ledger + total
+            formatted_amount = str(format(item['amount'], '.2f'))
+            description = item['description']
+            description = description[:23] if len(description) > 23 else description
+            self.output += f'{description:23}{formatted_amount:>7}\n' 
+        
+        # adds total balance to output string
+        formatted_balance = str(format(self.balance, '.2f'))
+        self.output += 'Total: ' + formatted_balance
 
-    def deposit(self, amount, description=""):
-        self.ledger.append({"amount": amount, "description": description})
-        self.__balance += amount
+        return self.output
 
-    def withdraw(self, amount, description=""):
-        if self.__balance - amount >= 0:
-            self.ledger.append({"amount": -1 * amount, "description": description})
-            self.__balance -= amount
+    # deposit in amount 
+    def deposit(self, amount, description = ''):
+        self.balance += amount
+        self.ledger.append({'amount': amount, 'description': description})
+
+    # withdraw amount
+    def withdraw(self, amount, description = ''):
+        if self.check_funds(amount):
+            self.balance -= amount
+            self.total_withdrawn += amount
+            self.ledger.append({'amount': amount * -1, 'description': description})
             return True
-        else:
-            return False
+        return False
 
     def get_balance(self):
-        return self.__balance
+        return self.balance
 
-    def transfer(self, amount, category_instance):
-        if self.withdraw(amount, "Transfer to {}".format(category_instance.description)):
-            category_instance.deposit(amount, "Transfer from {}".format(self.description))
+    def transfer(self, amount, category):
+        if self.check_funds(amount):
+            self.balance -= amount
+            self.ledger.append({'amount': amount * -1, 'description': f'Transfer to {category.category_name}'})
+            category.deposit(amount, f'Transfer from {self.category_name}')
             return True
-        else:
-            return False
+        return False
 
     def check_funds(self, amount):
-        if self.__balance >= amount:
-            return True
-        else:
+        if amount > self.balance:
             return False
+        return True
+
+    def percentage_spent(self, total_spent):
+        return round((self.total_withdrawn / total_spent) * 100, -1)
 
 
 def create_spend_chart(categories):
-    spent_amounts = []
-    # Get total spent in each category
-    for category in categories:
-        spent = 0
-        for item in category.ledger:
-            if item["amount"] < 0:
-                spent += abs(item["amount"])
-        spent_amounts.append(round(spent, 2))
+    spend_chart = 'Percentage spent by category\n'
 
-    # Calculate percentage rounded down to the nearest 10
-    total = round(sum(spent_amounts), 2)
-    spent_percentage = list(map(lambda amount: int((((amount / total) * 10) // 1) * 10), spent_amounts))
-
-    # Create the bar chart substrings
-    header = "Percentage spent by category\n"
-
-    chart = ""
-    for value in reversed(range(0, 101, 10)):
-        chart += str(value).rjust(3) + '|'
-        for percent in spent_percentage:
-            if percent >= value:
-                chart += " o "
+    total_spent = sum(category.total_withdrawn for category in categories)
+    
+    for i in range(100, -10, -10):
+        spend_chart += f'{i:>3}|'
+        for category in categories:
+            if category.percentage_spent(total_spent) >= i:
+                spend_chart += ' o '
             else:
-                chart += "   "
-        chart += " \n"
+                spend_chart += '   '
+        spend_chart += ' \n'
+    
+    spend_chart += '    ' + '---' * len(categories) + '-\n'
 
-    footer = "    " + "-" * ((3 * len(categories)) + 1) + "\n"
-    descriptions = list(map(lambda category: category.description, categories))
-    max_length = max(map(lambda description: len(description), descriptions))
-    descriptions = list(map(lambda description: description.ljust(max_length), descriptions))
-    for x in zip(*descriptions):
-        footer += "    " + "".join(map(lambda s: s.center(3), x)) + " \n"
+    end_point = max(len(category.category_name) for category in categories)
 
-    return (header + chart + footer).rstrip("\n")
+    for j in range(end_point):
+        spend_chart += '    '
+        for category in categories:
+            name = getattr(category, 'category_name', '')
+            if j < len(name):
+                spend_chart += f' {name[j]} '
+            else:
+                spend_chart += '   '
+        spend_chart += '\n'
+        
+    
+    return spend_chart.rstrip('\n')
